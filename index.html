@@ -1,0 +1,741 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>母带级音频处理 · Rubber Band 工业级变速</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141821; --panel-2:#1b202b; --line:#252c3a;
+    --txt:#e6ebf5; --dim:#8b95a8; --accent:#4f8cff; --accent-2:#7c5cff;
+    --ok:#2ecc71; --warn:#ffb020;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #1a2233 0%, var(--bg) 60%);
+    color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    min-height:100vh;padding:28px 16px 60px;-webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:900px;margin:0 auto}
+  header{text-align:center;margin-bottom:26px}
+  h1{font-size:24px;font-weight:700;letter-spacing:.5px;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  header p{color:var(--dim);font-size:13px;margin-top:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px}
+  .drop{position:relative;display:block;border:2px dashed #2b3446;border-radius:14px;
+    padding:38px 20px;text-align:center;cursor:pointer;transition:.2s;
+    background:var(--panel-2);-webkit-tap-highlight-color:transparent;}
+  .drop:hover,.drop.over{border-color:var(--accent);background:#1a2333}
+  .drop .icon{font-size:36px;margin-bottom:10px;opacity:.9}
+  .drop .t{font-size:15px;font-weight:600}
+  .drop .s{font-size:12px;color:var(--dim);margin-top:6px}
+  .drop input[type=file]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10}
+  .fileinfo{display:none;margin-top:14px;padding:12px 14px;border-radius:10px;
+    background:var(--panel-2);border:1px solid var(--line);font-size:13px;color:var(--dim);
+    justify-content:space-between;align-items:center;gap:12px;}
+  .fileinfo.show{display:flex}
+  .fileinfo b{color:var(--txt);font-weight:600}
+  .player{display:flex;align-items:center;gap:14px}
+  .playbtn{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:19px;
+    display:flex;align-items:center;justify-content:center;transition:.15s;box-shadow:0 6px 18px rgba(79,140,255,.3);}
+  .playbtn:hover{transform:scale(1.06)}
+  .playbtn:active{transform:scale(.97)}
+  .playbtn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+  .seekwrap{flex:1;display:flex;flex-direction:column;gap:6px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+    background:#2b3446;outline:none;cursor:pointer;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(79,140,255,.18);}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;}
+  .time{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;display:flex;justify-content:space-between}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px 24px}
+  .ctrl{display:flex;flex-direction:column;gap:9px}
+  .ctrl .lbl{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}
+  .ctrl .lbl span:first-child{color:var(--dim)}
+  .ctrl .lbl .val{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums;
+    background:rgba(79,140,255,.1);padding:1px 8px;border-radius:6px;font-size:12px;}
+  .sec-title{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--dim);margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+  .sec-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  .export-row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .select-group{display:flex;flex-direction:column;gap:7px;flex:1;min-width:140px}
+  .select-group label{font-size:12px;color:var(--dim)}
+  select{background:var(--panel-2);color:var(--txt);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;font-size:13px;outline:none;cursor:pointer;font-family:inherit;}
+  select:focus{border-color:var(--accent)}
+  .btn{border:none;border-radius:11px;padding:13px 26px;font-size:14px;font-weight:600;
+    cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
+    box-shadow:0 6px 20px rgba(79,140,255,.28);}
+  .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 26px rgba(79,140,255,.38)}
+  .btn-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  .progress{display:none;margin-top:18px}
+  .progress.show{display:block}
+  .bar{height:6px;background:#222a38;border-radius:4px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0%;border-radius:4px;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .25s ease;}
+  .progress .msg{font-size:12px;color:var(--dim);margin-top:9px;text-align:center}
+  .hint{font-size:11.5px;color:#5f6a7d;line-height:1.7;margin-top:14px}
+  .hint b{color:var(--warn);font-weight:600}
+  .badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:5px;
+    background:rgba(46,204,113,.13);color:var(--ok);font-weight:700;letter-spacing:.4px;
+    vertical-align:middle;margin-left:6px;}
+  .loading-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);
+    z-index:10000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff;}
+  .loading-overlay.show{display:flex;}
+  .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--accent);
+    border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:640px){
+    h1{font-size:20px}
+    .card{padding:16px;border-radius:13px}
+    .grid{grid-template-columns:1fr}
+    .export-row{flex-direction:column;align-items:stretch}
+    .btn{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>母带级音频处理工作台</h1>
+    <p>Rubber Band WASM · 工业级变速不变调</p>
+  </header>
+
+  <div class="card">
+    <label class="drop" id="drop" for="fileInput">
+      <div class="icon">🎵</div>
+      <div class="t">点击这里选择音频文件</div>
+      <div class="s">推荐 WAV / FLAC / ALAC / AIFF（无损源）</div>
+      <input type="file" id="fileInput" accept="audio/*">
+    </label>
+    <div class="fileinfo" id="fileInfo">
+      <span>📄 <b id="fileName">—</b></span>
+      <span id="fileMeta">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="player">
+      <button class="playbtn" id="playBtn" disabled>▶</button>
+      <div class="seekwrap">
+        <input type="range" id="seek" min="0" max="1000" value="0" step="1">
+        <div class="time"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title">处理参数 <span class="badge" id="bypassBadge">直通模式</span></div>
+    <div class="grid">
+      <div class="ctrl">
+        <div class="lbl"><span>变速（不变调）</span><span class="val" id="vSpeed">1.00×</span></div>
+        <input type="range" id="rSpeed" min="0.5" max="2" step="0.01" value="1">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>增益</span><span class="val" id="vGain">0.0 dB</span></div>
+        <input type="range" id="rGain" min="-12" max="12" step="0.5" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>混响量</span><span class="val" id="vMix">0%</span></div>
+        <input type="range" id="rMix" min="0" max="1" step="0.01" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>空间大小</span><span class="val" id="vRoom">2.0 s</span></div>
+        <input type="range" id="rRoom" min="0" max="1" step="0.01" value="0.35">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>衰减速度</span><span class="val" id="vDecay">2.5</span></div>
+        <input type="range" id="rDecay" min="0" max="1" step="0.01" value="0.4">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>高通（0 = 关）</span><span class="val" id="vHP">关闭</span></div>
+        <input type="range" id="rHP" min="0" max="500" step="5" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>低通（0 = 关）</span><span class="val" id="vLP">关闭</span></div>
+        <input type="range" id="rLP" min="0" max="20000" step="100" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="lbl"><span>预览音量</span><span class="val" id="vVol">100%</span></div>
+        <input type="range" id="rVol" min="0" max="1.5" step="0.01" value="1">
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--dim);">
+      <input type="checkbox" id="chkBypass" checked style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);">
+      <label for="chkBypass" style="cursor:pointer;flex:1;">直通模式（不添加任何效果，只有变速）</label>
+    </div>
+
+    <div class="hint">
+      <b>引擎：</b>Rubber Band WASM（工业标准算法）。处理在 Web Worker 中进行，不阻塞界面。
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title">导出母带 <span class="badge">24-bit PCM</span></div>
+    <div class="export-row">
+      <div class="select-group">
+        <label>采样率</label>
+        <select id="selSR">
+          <option value="src" selected>保持源采样率（推荐）</option>
+          <option value="44100">44,100 Hz（CD）</option>
+          <option value="48000">48,000 Hz（标准）</option>
+          <option value="96000">96,000 Hz（母带）</option>
+          <option value="192000">192,000 Hz（超高清）</option>
+        </select>
+      </div>
+      <div class="select-group">
+        <label>位深 / 格式</label>
+        <select id="selBD">
+          <option value="24" selected>24-bit PCM（推荐 · 全平台兼容）</option>
+          <option value="16">16-bit PCM（CD 标准）</option>
+          <option value="32">32-bit Float（仅 DAW 使用）</option>
+        </select>
+      </div>
+      <div class="select-group">
+        <label>质量引擎</label>
+        <select id="selEngine">
+          <option value="finer" selected>Finer（高质量 · 推荐）</option>
+          <option value="faster">Faster（快速）</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="exportBtn" disabled>导出母带</button>
+    </div>
+
+    <div class="progress" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="msg" id="progMsg">准备中…</div>
+    </div>
+
+    <div class="hint">
+      全程 Float32 浮点渲染，落地为 24-bit PCM WAV。无 MP3/AAC/Opus 有损压缩。
+    </div>
+  </div>
+
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div id="loadingText">正在加载 Rubber Band 引擎…</div>
+</div>
+
+<audio id="player" preload="metadata"></audio>
+
+<script type="importmap">
+{
+  "imports": {
+    "timestretcher": "https://cdn.jsdelivr.net/npm/timestretcher@3.2.0/dist/timestretcher.esm.min.js"
+  }
+}
+</script>
+
+<script type="module">
+import { Timestretcher } from 'timestretcher';
+
+const $ = id => document.getElementById(id);
+const player = $('player');
+
+let currentFile = null;
+let audioCtx = null;
+let graphReady = false;
+let srcNode, hpNode, lpNode, dryGain, wetGain, convolver, masterGain;
+let irTimer = null;
+let rubberBandReady = false;
+
+function fmtTime(s){
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+}
+function setPreservesPitch(el, val){
+  if ('preservesPitch' in el) el.preservesPitch = val;
+  else if ('mozPreservesPitch' in el) el.mozPreservesPitch = val;
+  else if ('webkitPreservesPitch' in el) el.webkitPreservesPitch = val;
+}
+function showToast(msg, isError = false){
+  let t = document.getElementById('myToast');
+  if (!t){
+    t = document.createElement('div');
+    t.id = 'myToast';
+    t.style.cssText = `position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+      padding:12px 22px;border-radius:30px;font-size:13px;z-index:9999;
+      box-shadow:0 4px 12px rgba(0,0,0,.5);transition:opacity .3s;
+      max-width:90%;text-align:center;color:#fff;font-family:inherit;`;
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = isError ? '#ff4d4f' : '#2ecc71';
+  t.style.opacity = '1';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => { t.style.opacity = '0'; }, 3200);
+}
+function isBypass(){
+  const speed = parseFloat($('rSpeed').value);
+  const gain  = parseFloat($('rGain').value);
+  const mix   = parseFloat($('rMix').value);
+  const hp    = parseFloat($('rHP').value);
+  const lp    = parseFloat($('rLP').value);
+  return $('chkBypass').checked ||
+    (Math.abs(speed - 1) < 1e-4 && Math.abs(gain) < 1e-4 && mix < 1e-4 && hp <= 0 && lp <= 0);
+}
+function updateBypassBadge(){
+  const b = $('bypassBadge');
+  if (isBypass()){ b.textContent = '直通模式'; b.style.background = 'rgba(46,204,113,.13)'; b.style.color = '#2ecc71'; }
+  else { b.textContent = '处理中'; b.style.background = 'rgba(255,176,32,.13)'; b.style.color = '#ffb020'; }
+}
+
+async function ensureRubberBand(){
+  if (rubberBandReady) return;
+  const overlay = $('loadingOverlay');
+  overlay.classList.add('show');
+  $('loadingText').textContent = '正在加载 Rubber Band 引擎…';
+  try {
+    await Timestretcher.init();
+    rubberBandReady = true;
+    showToast('✅ Rubber Band 引擎已就绪');
+  } catch(e){
+    console.error(e);
+    showToast('❌ Rubber Band 引擎加载失败，请检查网络', true);
+    throw e;
+  } finally {
+    overlay.classList.remove('show');
+  }
+}
+
+function initGraph(){
+  if (graphReady) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    srcNode = audioCtx.createMediaElementSource(player);
+    hpNode = audioCtx.createBiquadFilter();
+    hpNode.type = 'highpass'; hpNode.frequency.value = 10; hpNode.Q.value = 0.7;
+    lpNode = audioCtx.createBiquadFilter();
+    lpNode.type = 'lowpass'; lpNode.frequency.value = 22000; lpNode.Q.value = 0.7;
+    dryGain = audioCtx.createGain();
+    wetGain = audioCtx.createGain();
+    convolver = audioCtx.createConvolver();
+    convolver.normalize = true;
+    convolver.buffer = generateIR(audioCtx, 2.0, 2.5);
+    masterGain = audioCtx.createGain();
+
+    srcNode.connect(hpNode);
+    hpNode.connect(lpNode);
+    lpNode.connect(dryGain);
+    lpNode.connect(convolver);
+    convolver.connect(wetGain);
+    dryGain.connect(masterGain);
+    wetGain.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+    graphReady = true;
+    applyLiveParams();
+  } catch(e){ console.error(e); showToast('音频引擎初始化失败', true); }
+}
+
+function generateIR(ctx, duration, decay){
+  const sr = ctx.sampleRate;
+  const len = Math.max(1, Math.floor(sr * duration));
+  const pre = Math.min(len - 1, Math.floor(sr * 0.012));
+  const buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < 8; i++){
+      const pos = pre + Math.floor(Math.pow(Math.random(), 1.6) * sr * 0.09);
+      if (pos < len) d[pos] += (Math.random() * 2 - 1) * 0.55 * Math.pow(0.72, i);
+    }
+    for (let i = pre; i < len; i++){
+      const t = (i - pre) / (len - pre);
+      d[i] += (Math.random() * 2 - 1) * Math.pow(1 - t, decay) * 0.42;
+    }
+    if (ch === 1){
+      for (let i = pre + 37; i < len; i++) d[i] = d[i] * 0.94 + d[i - 37] * 0.06;
+    }
+    const fade = Math.min(256, Math.floor(len * 0.02));
+    for (let i = 0; i < fade; i++) d[i] *= i / fade;
+  }
+  return buf;
+}
+
+function applyLiveParams(){
+  if (!graphReady) return;
+  const gainDb = parseFloat($('rGain').value);
+  const mix    = parseFloat($('rMix').value);
+  const vol    = parseFloat($('rVol').value);
+  const hp     = parseFloat($('rHP').value);
+  const lp     = parseFloat($('rLP').value);
+  const t = audioCtx.currentTime;
+  dryGain.gain.setTargetAtTime(1 - mix * 0.55, t, 0.02);
+  wetGain.gain.setTargetAtTime(mix * 1.15, t, 0.02);
+  masterGain.gain.setTargetAtTime(Math.pow(10, gainDb / 20) * vol, t, 0.02);
+  hpNode.frequency.setTargetAtTime(hp > 0 ? hp : 5, t, 0.02);
+  lpNode.frequency.setTargetAtTime(lp > 0 ? lp : 22000, t, 0.02);
+  updateBypassBadge();
+}
+
+function scheduleIRRebuild(){
+  if (!graphReady) return;
+  clearTimeout(irTimer);
+  irTimer = setTimeout(() => {
+    convolver.buffer = generateIR(audioCtx,
+      0.35 + parseFloat($('rRoom').value) * 4.2,
+      0.8  + parseFloat($('rDecay').value) * 5.2);
+  }, 220);
+}
+
+function encodeWAV(channels, sampleRate, bitDepth){
+  const numCh = channels.length, numFrames = channels[0].length;
+  let bitsPerSample, formatCode, bytesPerSample;
+  if (bitDepth === 16){ bitsPerSample = 16; formatCode = 1; bytesPerSample = 2; }
+  else if (bitDepth === 24){ bitsPerSample = 24; formatCode = 1; bytesPerSample = 3; }
+  else { bitsPerSample = 32; formatCode = 3; bytesPerSample = 4; }
+  const blockAlign = numCh * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numFrames * blockAlign;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+  let p = 0;
+  const wStr = s => { for (let i = 0; i < s.length; i++) view.setUint8(p++, s.charCodeAt(i)); };
+  const wU32 = v => { view.setUint32(p, v, true); p += 4; };
+  const wU16 = v => { view.setUint16(p, v, true); p += 2; };
+  wStr('RIFF'); wU32(36 + dataSize); wStr('WAVE');
+  wStr('fmt '); wU32(16); wU16(formatCode); wU16(numCh);
+  wU32(sampleRate); wU32(byteRate); wU16(blockAlign); wU16(bitsPerSample);
+  wStr('data'); wU32(dataSize);
+  if (bitDepth === 16){
+    for (let i = 0; i < numFrames; i++){
+      for (let c = 0; c < numCh; c++){
+        let s = channels[c][i]; s = s < -1 ? -1 : s > 1 ? 1 : s;
+        view.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7FFF, true); p += 2;
+      }
+    }
+  } else if (bitDepth === 24){
+    for (let i = 0; i < numFrames; i++){
+      for (let c = 0; c < numCh; c++){
+        let s = channels[c][i]; s = s < -1 ? -1 : s > 1 ? 1 : s;
+        const v = Math.round(s < 0 ? s * 0x800000 : s * 0x7FFFFF);
+        view.setUint8(p, v & 0xFF); view.setUint8(p + 1, (v >> 8) & 0xFF); view.setUint8(p + 2, (v >> 16) & 0xFF);
+        p += 3;
+      }
+    }
+  } else {
+    for (let i = 0; i < numFrames; i++){
+      for (let c = 0; c < numCh; c++){ view.setFloat32(p, channels[c][i], true); p += 4; }
+    }
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+const fileInput = $('fileInput');
+const playBtn   = $('playBtn');
+const seek      = $('seek');
+const dropEl    = $('drop');
+
+['dragenter','dragover'].forEach(ev =>
+  dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add('over'); })
+);
+['dragleave','drop'].forEach(ev =>
+  dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove('over'); })
+);
+dropEl.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) loadFile(f);
+});
+
+function loadFile(file){
+  currentFile = file;
+  const isAudio = file.type.startsWith('audio/') ||
+    /\.(mp3|wav|flac|m4a|ogg|aac|opus|wma|aiff|alac)$/i.test(file.name);
+  if (!isAudio){ showToast('⚠️ 请选择音频文件', true); return; }
+
+  try {
+    if (player.src) URL.revokeObjectURL(player.src);
+    player.src = URL.createObjectURL(file);
+    player.load();
+    setPreservesPitch(player, true);
+    player.playbackRate = parseFloat($('rSpeed').value);
+
+    const lossy = /\.(mp3|m4a|aac|ogg|opus|wma)$/i.test(file.name) || file.type.includes('mpeg');
+    if (lossy) showToast('⚠️ 有损格式，音质受源头限制，建议用 WAV/FLAC', true);
+    else showToast('✅ 无损音频已加载');
+  } catch(e){ showToast('❌ 音频加载失败', true); }
+
+  $('fileName').textContent = file.name;
+  $('fileMeta').textContent = (file.size / 1048576).toFixed(1) + ' MB';
+  $('fileInfo').classList.add('show');
+  playBtn.disabled = false;
+  $('exportBtn').disabled = false;
+  updateBypassBadge();
+  ensureRubberBand().catch(() => {});
+}
+
+playBtn.addEventListener('click', async () => {
+  try {
+    if (!graphReady) initGraph();
+    if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+    if (player.paused) await player.play();
+    else player.pause();
+  } catch (err){ console.error(err); showToast('⚠️ 播放失败', true); }
+});
+
+player.addEventListener('play',  () => { playBtn.textContent = '❚❚'; });
+player.addEventListener('pause', () => { playBtn.textContent = '▶'; });
+player.addEventListener('ended', () => { playBtn.textContent = '▶'; });
+player.addEventListener('loadedmetadata', () => { $('tDur').textContent = fmtTime(player.duration); });
+player.addEventListener('timeupdate', () => {
+  if (!player.duration) return;
+  seek.value = (player.currentTime / player.duration) * 1000;
+  $('tCur').textContent = fmtTime(player.currentTime);
+});
+seek.addEventListener('input', () => {
+  if (!player.duration) return;
+  player.currentTime = (seek.value / 1000) * player.duration;
+});
+
+function bindSlider(id, valId, fmt, onChange){
+  const el = $(id), out = $(valId);
+  const update = () => {
+    out.textContent = fmt(parseFloat(el.value));
+    if (onChange) onChange(parseFloat(el.value));
+  };
+  el.addEventListener('input', update);
+  update();
+}
+
+bindSlider('rSpeed', 'vSpeed', v => v.toFixed(2) + '×', v => {
+  setPreservesPitch(player, true);
+  player.playbackRate = v;
+  updateBypassBadge();
+});
+bindSlider('rGain', 'vGain', v => (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB', applyLiveParams);
+bindSlider('rMix',  'vMix',  v => Math.round(v * 100) + '%', applyLiveParams);
+bindSlider('rVol',  'vVol',  v => Math.round(v * 100) + '%', applyLiveParams);
+bindSlider('rRoom', 'vRoom', v => (0.35 + v * 4.2).toFixed(1) + ' s', scheduleIRRebuild);
+bindSlider('rDecay','vDecay',v => (0.8 + v * 5.2).toFixed(1), scheduleIRRebuild);
+bindSlider('rHP', 'vHP', v => v === 0 ? '关闭' : Math.round(v) + ' Hz', applyLiveParams);
+bindSlider('rLP', 'vLP', v => v === 0 ? '关闭' : Math.round(v) + ' Hz', applyLiveParams);
+
+$('chkBypass').addEventListener('change', () => {
+  if ($('chkBypass').checked){
+    $('rGain').value = 0; $('rGain').dispatchEvent(new Event('input'));
+    $('rMix').value  = 0; $('rMix').dispatchEvent(new Event('input'));
+    $('rHP').value   = 0; $('rHP').dispatchEvent(new Event('input'));
+    $('rLP').value   = 0; $('rLP').dispatchEvent(new Event('input'));
+  }
+  applyLiveParams();
+});
+
+function setProgress(pct, msg){
+  $('progress').classList.add('show');
+  $('barFill').style.width = Math.min(100, Math.max(0, pct)) + '%';
+  if (msg) $('progMsg').textContent = msg;
+}
+
+$('exportBtn').addEventListener('click', async () => {
+  if (!currentFile) { showToast('⚠️ 请先导入音频', true); return; }
+  const btn = $('exportBtn');
+  btn.disabled = true;
+  const originText = btn.textContent;
+  btn.textContent = '处理中…';
+  try {
+    await ensureRubberBand();
+    await exportAudioPipeline();
+  } catch (err){
+    console.error(err);
+    showToast('❌ 导出失败：' + (err && err.message ? err.message : err), true);
+    setProgress(0, '❌ 出错，请重试');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originText;
+  }
+});
+
+async function exportAudioPipeline(){
+  setProgress(0, '正在解码音频…');
+  await new Promise(r => setTimeout(r, 30));
+
+  const arrayBuf = await currentFile.arrayBuffer();
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  let decoded;
+  try { decoded = await tmpCtx.decodeAudioData(arrayBuf); }
+  catch(e){ throw new Error('浏览器无法解码此音频，请尝试 WAV / MP3'); }
+
+  const numCh = decoded.numberOfChannels;
+  const srcSR = decoded.sampleRate;
+  const speed = parseFloat($('rSpeed').value);
+  const bypass = isBypass();
+
+  const srChoice = $('selSR').value;
+  const targetSR = srChoice === 'src' ? srcSR : parseInt(srChoice, 10);
+
+  if (bypass && Math.abs(speed - 1) < 1e-4){
+    setProgress(50, '直通模式：字节级原样导出…');
+    const chs = [];
+    for (let c = 0; c < numCh; c++) chs.push(new Float32Array(decoded.getChannelData(c)));
+    const bitDepth = parseInt($('selBD').value, 10);
+    setProgress(85, '编码 WAV…');
+    await new Promise(r => setTimeout(r, 30));
+    const wavBlob = encodeWAV(chs, srcSR, bitDepth);
+    const base = (currentFile.name || 'audio').replace(/\.[^.]+$/, '');
+    const bdTag = bitDepth === 32 ? '32f' : bitDepth + 'bit';
+    const name = `${base}_lossless_${srcSR/1000}k_${bdTag}.wav`;
+    downloadBlob(wavBlob, name);
+    setProgress(100, `✅ 直通导出完成：${name}`);
+    try { await tmpCtx.close(); } catch(e){}
+    return;
+  }
+
+  let stretchedChannels;
+  let stretchedSR = srcSR;
+  let stretchedLength;
+
+  if (Math.abs(speed - 1) < 1e-4){
+    const chs = [];
+    for (let c = 0; c < numCh; c++) chs.push(new Float32Array(decoded.getChannelData(c)));
+    stretchedChannels = chs;
+    stretchedLength = decoded.length;
+    setProgress(60, '速度 1.00×，跳过滤速');
+  } else {
+    setProgress(5, 'Rubber Band 变速中（工业级）…');
+    const engine = $('selEngine').value;
+    const out = await Timestretcher.timestretch(decoded, {
+      timeRatio: speed,
+      engine: engine,
+      formant: 'preserved'
+    });
+    stretchedChannels = [];
+    for (let c = 0; c < out.numberOfChannels; c++){
+      stretchedChannels.push(new Float32Array(out.getChannelData(c)));
+    }
+    stretchedSR = out.sampleRate;
+    stretchedLength = out.length;
+    setProgress(65, 'Rubber Band 处理完成');
+  }
+
+  setProgress(68, '构建离线效果链…');
+  await new Promise(r => setTimeout(r, 30));
+
+  const bitDepth = parseInt($('selBD').value, 10);
+  let workSR = stretchedSR;
+  let workChannels = stretchedChannels;
+
+  if (targetSR !== stretchedSR){
+    setProgress(70, `重采样 ${stretchedSR} → ${targetSR} Hz…`);
+    const resampleLen = Math.ceil(stretchedLength * targetSR / stretchedSR);
+    const rsCtx = new OfflineAudioContext(numCh, resampleLen, targetSR);
+    const rsBuf = rsCtx.createBuffer(numCh, stretchedLength, stretchedSR);
+    for (let c = 0; c < numCh; c++) rsBuf.copyToChannel(stretchedChannels[c], c);
+    const rsSrc = rsCtx.createBufferSource();
+    rsSrc.buffer = rsBuf;
+    rsSrc.connect(rsCtx.destination);
+    rsSrc.start(0);
+    const rendered = await rsCtx.startRendering();
+    workChannels = [];
+    for (let c = 0; c < numCh; c++) workChannels.push(new Float32Array(rendered.getChannelData(c)));
+    workSR = targetSR;
+  }
+
+  setProgress(75, '应用效果链…');
+  const outLen = workChannels[0].length + Math.ceil(workSR * 0.3);
+  const offCtx = new OfflineAudioContext(numCh, outLen, workSR);
+  const buf = offCtx.createBuffer(numCh, workChannels[0].length, workSR);
+  for (let c = 0; c < numCh; c++) buf.copyToChannel(workChannels[c], c);
+
+  const src = offCtx.createBufferSource();
+  src.buffer = buf;
+
+  const gainDb = parseFloat($('rGain').value);
+  const mix    = parseFloat($('rMix').value);
+  const room   = parseFloat($('rRoom').value);
+  const dec    = parseFloat($('rDecay').value);
+  const hp     = parseFloat($('rHP').value);
+  const lp     = parseFloat($('rLP').value);
+
+  let lastNode = src;
+  if (hp > 0){
+    const hpf = offCtx.createBiquadFilter();
+    hpf.type = 'highpass'; hpf.frequency.value = hp; hpf.Q.value = 0.7;
+    lastNode.connect(hpf); lastNode = hpf;
+  }
+  if (lp > 0){
+    const lpf = offCtx.createBiquadFilter();
+    lpf.type = 'lowpass'; lpf.frequency.value = lp; lpf.Q.value = 0.7;
+    lastNode.connect(lpf); lastNode = lpf;
+  }
+  if (mix > 0.001){
+    const conv = offCtx.createConvolver();
+    conv.normalize = true;
+    conv.buffer = generateIR(offCtx, 0.35 + room * 4.2, 0.8 + dec * 5.2);
+    const dry = offCtx.createGain(); dry.gain.value = 1 - mix * 0.55;
+    const wet = offCtx.createGain(); wet.gain.value = mix * 1.15;
+    lastNode.connect(dry); lastNode.connect(conv); conv.connect(wet);
+    const sum = offCtx.createGain();
+    dry.connect(sum); wet.connect(sum);
+    lastNode = sum;
+  }
+  if (Math.abs(gainDb) > 1e-4){
+    const g = offCtx.createGain();
+    g.gain.value = Math.pow(10, gainDb / 20);
+    lastNode.connect(g); lastNode = g;
+  }
+  lastNode.connect(offCtx.destination);
+  src.start(0);
+
+  setProgress(82, '离线浮点渲染中…');
+  const rendered = await offCtx.startRendering();
+
+  const chans = [];
+  let peak = 0;
+  for (let c = 0; c < rendered.numberOfChannels; c++){
+    const d = rendered.getChannelData(c);
+    for (let i = 0; i < d.length; i++){ const a = Math.abs(d[i]); if (a > peak) peak = a; }
+  }
+  const scale = peak > 1.0 ? (0.966 / peak) : 1;
+  for (let c = 0; c < rendered.numberOfChannels; c++){
+    const src0 = rendered.getChannelData(c);
+    const out = new Float32Array(src0.length);
+    for (let i = 0; i < src0.length; i++) out[i] = src0[i] * scale;
+    chans.push(out);
+  }
+
+  setProgress(94, '编码 WAV…');
+  await new Promise(r => setTimeout(r, 20));
+  const wavBlob = encodeWAV(chans, workSR, bitDepth);
+
+  const base = (currentFile.name || 'audio').replace(/\.[^.]+$/, '');
+  const bdTag = bitDepth === 32 ? '32f' : bitDepth + 'bit';
+  const name = `${base}_master_${speed.toFixed(2)}x_${workSR/1000}k_${bdTag}.wav`;
+
+  downloadBlob(wavBlob, name);
+  setProgress(100, `✅ 导出完成：${name}（${(wavBlob.size/1048576).toFixed(1)} MB）`);
+  try { await tmpCtx.close(); } catch(e){}
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+setPreservesPitch(player, true);
+window.addEventListener('click', () => {
+  if (!graphReady && currentFile) initGraph();
+}, { once: true, passive: true });
+updateBypassBadge();
+
+console.log('母带工作台已就绪（Rubber Band WASM 版）');
+</script>
+</body>
+</html>
